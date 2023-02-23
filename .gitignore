@@ -2,4 +2,6 @@ a.out
 *.o
 wsws
 CTAGS
+.DS_Store
+tester
 
