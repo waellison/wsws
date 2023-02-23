@@ -1,10 +1,14 @@
-CFLAGS=--std=c99 -Wall -Werror -pedantic -I./include -g -DDEBUG
+CFLAGS=--std=c99 -Wall -Werror -pedantic -I../include -g -DDEBUG
 LFLAGS=
-OBJS=main.o
-TARGET=wsws
+OBJS=main.o socketfun.o
 
-all: $(OBJS)
-	$(CC) $(LFLAGS) -o $(TARGET) $(OBJS)
+all: wsws tester
+
+wsws: main.o socketfun.o
+	$(CC) $(LFLAGS) -o wsws $(OBJS)
+
+tester: test.o socketfun.o
+	$(CC) $(LFLAGS) -o tester $(OBJS)
 
 .SUFFIXES: .c.o
 .c.o: $*.c
@@ -12,5 +16,5 @@ all: $(OBJS)
 
 .PHONY: clean
 clean:
-	-rm -rf *.o a.out core wsws
+	-rm -rf *.o a.out core wsws tester
 
