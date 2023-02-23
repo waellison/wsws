@@ -1,13 +1,38 @@
-extern int serve_socket(char *hn, int port);
-		/* This serves a socket at the given host name and port
-		   number.  It returns an fd for that socket.  Hn should
-                   be the name of the server's machine. */
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
-extern int accept_connection(int s);
-		/* This accepts a connection on the given socket (i.e.
-                   it should only be called on by the server.  It returns
-                   the fd for the connection.  This fd is of course r/w */
+#ifndef _SOCKETFUN_H
+#define _SOCKETFUN_H
 
-extern int request_connection(char *hn, int port);
-		/* This is what the client calls to connect to a server's
-                   port.  It returns the fd for the connection. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Represent a socket's ip address in a human-readable format. */
+char *inadport_decimal(struct sockaddr_in *sad);
+
+/* Serve a socket at the given hostname and port number, returning
+   the file descriptor of the associated socket. */
+int serve_socket(char *hostname, int port);
+
+/* Accept a connection on the passed socket, returning the file
+   descriptor of the associated connection.  The returned FD is
+   read/write, as you would likely expect.
+   
+   @warning: To be called only by the server */
+int accept_connection(int fildes);
+
+/* Connect to the passed port on the passed server, returning the
+   file descriptor of the connection.  As with `accept_connection`,
+   the resulting file descriptor is read/write.
+
+   @warning: To be called only by the client */
+int request_connection(char *hostname, int port);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* defined _SOCKETFUN_H */
+
