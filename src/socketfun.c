@@ -1,132 +1,103 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <stdio.h>
 #include <netdb.h>
 #include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <strings.h>
+#include <unistd.h>
+#include <socketfun.h>
 
-static char *
-inadport_decimal(sad)
-struct sockaddr_in *sad;
-{
-    static char buf[32];
-    int a;
+char *inadport_decimal(struct sockaddr_in *sad) {
+  char *buf = (char *) malloc(32);
+  int address = ntohl(0xffffffff & sad->sin_addr.s_addr);
+  int port = (int) ntohs(sad->sin_port);
 
-    a = ntohl(0xffffffff & sad->sin_addr.s_addr);
-    sprintf(buf, "%d.%d.%d.%d:%d",
-            0xff & (a >> 24),
-            0xff & (a >> 16),
-            0xff & (a >> 8),
-            0xff & a,
-            0xffff & (int)ntohs(sad->sin_port));
-    return buf;
+  sprintf(buf, "%d.%d.%d.%d:%d",
+          0xff & (address >> 24),
+          0xff & (address >> 16),
+          0xff & (address >> 8),
+          0xff & address,
+          0xffff & port);
+
+  return buf;
 }
 
-int serve_socket(hn, port)
-char *hn;
-int port;
-{
+int serve_socket(char *hostname, int port) {
+  struct sockaddr_in socket_address;
+  int fildes;
+  struct hostent *host_entry;
 
-    struct sockaddr_in sn;
-    int s;
-    struct hostent *he;
+  if(!(host_entry = gethostbyname(hostname))) {
+    perror("gethostbyname");
+    exit(1);
+  }
 
-    if (!(he = gethostbyname(hn)))
-    {
-        puts("can't gethostname");
-        exit(1);
-    }
+  bzero(&socket_address, sizeof(socket_address));
+  socket_address.sin_family = AF_INET;
+  socket_address.sin_port = htons((short) port);
+  socket_address.sin_addr = *(struct in_addr *)(host_entry->h_addr_list[0]);
 
-    bzero((char *)&sn, sizeof(sn));
-    sn.sin_family = AF_INET;
-    sn.sin_port = htons((short)port);
-    sn.sin_addr = *(struct in_addr *)(he->h_addr_list[0]);
+  if((fildes = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+    perror("socket");
+    exit(1);
+  }
 
-    if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-    {
-        perror("socket()");
-        exit(1);
-    }
-    if (bind(s, (struct sockaddr *)&sn, sizeof(sn)) == -1)
-    {
-        perror("bind()");
-        exit(1);
-    }
+  if(bind(fildes, (struct sockaddr *) &socket_address, sizeof(socket_address)) == -1) {
+    perror("bind");
+    exit(1);
+  }
 
-    return s;
+  return fildes;
 }
 
-int accept_connection(s)
-int s;
-{
-    int l;
-    struct sockaddr_in sn;
-    int x;
+int accept_connection(int fildes) {
+  socklen_t length;
+  struct sockaddr_in socket_address;
+  int response;
 
-    sn.sin_family = AF_INET;
+  socket_address.sin_family = AF_INET;
 
-    if (listen(s, 1) == -1)
-    {
-        perror("listen()");
-        exit(1);
-    }
+  if(listen(fildes, 1) == -1) {
+    perror("listen");
+    exit(1);
+  }
 
-    l = sizeof(sn);
-    if ((x = accept(s, (struct sockaddr *)&sn, &l)) == -1)
-    {
-        perror("accept()");
-        exit(1);
-    }
-    return x;
+  length = sizeof(socket_address);
+  if((response = accept(fildes, (struct sockaddr *) &socket_address, &length)) == -1) {
+    perror("accept");
+    exit(1);
+  }
+
+  return response;
 }
 
-#ifndef ALB
+int request_connection(char *hostname, int port) {
+  struct sockaddr_in socket_address;
+  int fildes, ok;
+  struct hostent *host_entry;
 
-int request_connection(hn, port)
-char *hn;
-int port;
-{
-    struct sockaddr_in sn;
-    int s, ok;
-    struct hostent *he;
+  if(!(host_entry = gethostbyname(hostname))) {
+    perror("gethostbyname");
+    exit(1);
+  }
 
-    if (!(he = gethostbyname(hn)))
-    {
-        puts("can't gethostname");
-        exit(1);
+  ok = 0;
+  while (!ok) {
+    socket_address.sin_family = AF_INET;
+    socket_address.sin_port = htons((short) port);
+    socket_address.sin_addr.s_addr = *(unsigned long *)(host_entry->h_addr_list[0]);
+
+    if((fildes = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+      perror("socket");
+      exit(1);
     }
-    ok = 0;
-    while (!ok)
-    {
-        sn.sin_family = AF_INET;
-        sn.sin_port = htons((short)port);
-        sn.sin_addr.s_addr = *(u_long *)(he->h_addr_list[0]);
 
-        if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-        {
-            perror("socket()");
-            exit(1);
-        }
-        ok = (connect(s, (struct sockaddr *)&sn, sizeof(sn)) != -1);
-        if (!ok)
-            sleep(1);
-    }
-    return s;
+    ok = (connect(fildes, (struct sockaddr *) &socket_address, sizeof(socket_address)) != -1);
+    if (!ok)
+      sleep(1);
+  }
+
+  return fildes;
 }
-
-#else ALB
-
-int request_connection(hn, port)
-char *hn;
-int port;
-{
-    char easy[BUFSIZ];
-    int ok;
-
-    sprintf(easy, "proxy!%s!%d", hn, port);
-    while ((ok = ipcopen(easy, "")) < 0)
-        sleep(1);
-    return ok;
-}
-
-#endif ALB
